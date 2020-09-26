@@ -515,5 +515,6 @@ LOW_D=100
 LOW_D_pixel=70
 
 
-circuit=circuit(track_folder="Tracks/Epita",ClearFolder=True,scalefactor=4)
-
+circuit1=circuit(track_folder="Tracks/Cristallin",ClearFolder=False,scalefactor=4)
+circuit2=circuit(track_folder="Tracks/Epita",ClearFolder=False,scalefactor=4)
+# scalefactor=4 : 1 pixel = 4mm
