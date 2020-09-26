@@ -24,27 +24,24 @@ import random
 
 
 class circuit():
-    def __init__(self,circuit_data=None, track_folder=None):
+    def __init__(self,circuit_data=None, track_folder=None, ClearFolder=None,scalefactor=4):
+        #### be carefull, the clearfolder option will delete all information from the folder ! 
 
-        self.reducefactor=4 # to save memory we will work with images where one pixel is a cm instead of images where 1pixel=1mm.
+        self.scalefactor=scalefactor # to save memory we will work with images where one pixel is a cm instead of images where 1pixel=1mm.
                               # 1 pixel = 1 * reducefactor mm
 
-   #     self.visible_surrounding= int(math.sqrt((self.visible_world_width/2)*(self.visible_world_width/2)+self.visible_world_height*self.visible_world_height))+10
+   #    self.visible_surrounding= int(math.sqrt((self.visible_world_width/2)*(self.visible_world_width/2)+self.visible_world_height*self.visible_world_height))+10
         #self.path = os.path.expanduser(path)
         #self.meta_path = os.path.join(self.path, 'meta.json')
 
-        self.TRANSPARENT=(255,255,255)
         self.BLACK = (0, 0, 0)   
-      #  self.WHITE = (170, 175, 169)  #used with success.
+        #self.WHITE = (170, 175, 169)  #used with success.
         self.WHITE = (255, 255, 255)
 
         self.WHITE_LEFT = (220, 220, 210)
         self.WHITE_RIGHT = (220, 220, 210)
         self.WHITE_CENTER = (220, 220, 210)
 
-        self.GREEN = (0, 255, 0)
-        self.BLUE = (0, 0, 255)
-        self.RED = (255, 0, 0)
 
         if track_folder is None : 
            self.track_folder="Tracks/Cristallin"
@@ -53,10 +50,27 @@ class circuit():
 
         self.texture_folder=self.track_folder+"/textures"
 
+        self.circuit_info={}
+        self.circuit_info["width"]=22000
+        self.circuit_info["height"]=8000
+        self.circuit_info["altitude"]=2200
+        self.circuit_info["tile_width"]=500
+        self.circuit_info["tile_height"]=500
+        self.circuit_info["translate_x"]=500
+        self.circuit_info["translate_y"]=1500
+
+        self.circuit_info["LINE_WIDTH"]=100
+        self.circuit_info["COLOR_LEFT"]=(220, 220, 210)
+        self.circuit_info["COLOR_RIGHT"]=(220, 220, 210)
+        self.circuit_info["COLOR_CENTER"]=(220, 220, 210)
+
+        self.defc=None
+
         # distances are in mm
         # build default circuit structure : 
+        if ClearFolder == True : 
 
-        self.defc1=[
+          self.defc1=[
               [1500,1500,-3*pi/2,500,1500,0,0],
               [1500,1500,-pi,500,1500,0,0],
               [1500,3100+1500,-pi,500,1500,0,0],
@@ -77,7 +91,7 @@ class circuit():
               [12000,3500,-pi-pi/2,1500,500,0,0],
               [15450,1500,-pi/2,500,1500,0,0],
               [15450,1500,pi-pi/2,500,1500,0,0]]
-        self.defc2=[
+          self.defc2=[
               [1500,1500,-3*pi/2,500,1500,0.5,0],
               [1500,1500,-pi/2 +pi/4-0.1, 500,1500,-0.5,1],
               [2765,3050,pi/2+pi/4-0.1,1500,500,-0.5,0],
@@ -97,25 +111,22 @@ class circuit():
               [19500,1500,0,500,1500,0.5,0],
               [19500,1500,pi/2,500,1500,0,0]]
 
-        self.defc=self.defc2
+          self.defc=self.defc2
+          self.circuit_info["defc"]=self.defc
+          # save the default circuit
+          try:
+            test=json.dumps(self.circuit_info)
+            test = test.replace("],", "],\n")
+            test = test.replace(', "', ', '+"\n"+'"')
+            test = test.replace(' "', '"')
 
-        self.circuit_info={}
-        self.circuit_info["width"]=22000
-        self.circuit_info["height"]=8000
-        self.circuit_info["altitude"]=2200
-        self.circuit_info["defc"]=self.defc
-        self.circuit_info["tile_width"]=500
-        self.circuit_info["tile_height"]=500
-        self.circuit_info["translate_x"]=500
-        self.circuit_info["translate_y"]=1500
-
-
-
-        try:
             with open(self.track_folder+"/def_track.json", 'w') as fp:
-                json.dump(self.circuit_info, fp,indent=3)
-        except:
-            print("Unexpected error:", sys.exc_info()[0])
+                fp.write(test)
+                #json.dump(self.circuit_info, fp,indent=3)
+                
+
+          except:
+                print("error opening file :", self.track_folder+"/def_track.json")
 
 
         # Load circuit info from file : 
@@ -124,6 +135,7 @@ class circuit():
                 self.circuit_info = json.load(f)
         except FileNotFoundError:
                 print("Error loading track config")
+
         self.defc=self.circuit_info["defc"]
 
         #sizes of circuit are in mm.
@@ -134,7 +146,6 @@ class circuit():
         self.Matrix_Ceiling_tile_width=self.circuit_info["tile_width"]
         self.Matrix_Ceiling_tile_height=self.circuit_info["tile_height"]
         # how many tiles will be needed to draw the ceiling ?  
-        self.tile_w, self.tile_h = 500,500
         self.Matrix_Ceiling_width=int(self.width/self.Matrix_Ceiling_tile_width)+1
         self.Matrix_Ceiling_height=int(self.height/self.Matrix_Ceiling_tile_height)+1
         self.Matrix_Ceiling = [[0 for x in range(self.Matrix_Ceiling_width)] for y in range(self.Matrix_Ceiling_height)]
@@ -145,6 +156,10 @@ class circuit():
         # size of tiles in real world : ( size are in mm)
         self.Matrix_Floor_tile_width=self.circuit_info["tile_width"]
         self.Matrix_Floor_tile_height=self.circuit_info["tile_height"]
+
+        self.tile_w, self.tile_h = self.Matrix_Floor_tile_width,self.Matrix_Floor_tile_height
+
+
         # how many tiles will be needed to draw the ceiling ?  
         self.Matrix_Floor_width=int(self.width/self.Matrix_Floor_tile_width)+1
         self.Matrix_Floor_height=int(self.height/self.Matrix_Floor_tile_height)+1
@@ -154,10 +169,10 @@ class circuit():
         self.Simple_Matrix_Floor = [[0 for x in range(self.Matrix_Floor_width)] for y in range(self.Matrix_Floor_height)]
 
 
+
         #when building a new map : this will generate dummy map_texture files : 
-        self.init_empty_map() 
-
-
+        if ClearFolder == True : 
+            self.init_empty_map() 
 
 
         self.translate_circuit(self.circuit_info["translate_x"],self.circuit_info["translate_y"])
@@ -165,6 +180,7 @@ class circuit():
          # define the array of available textures : 
         self.txlist=[]
         self.txnumbers=[]
+
         # define the 4 wall images ( left, top , right, bottom)
         self.side1,self.side1_w, self.side1_h=None,0,0
         self.side2,self.side2_w, self.side2_h=None,0,0
@@ -172,17 +188,16 @@ class circuit():
         self.side4,self.side4_w, self.side4_h=None,0,0
 
         #ground tile size
-        self.tile_w, self.tile_h = 500,500
 
         self.load_textures()  
         self.load_map()  
  
 
         # build the thumbnail image of the circuit : 
-        self.basewidth = int(self.width/self.reducefactor)
-        self.wpercent = (1/self.reducefactor)
+        self.basewidth = int(self.width/self.scalefactor)
+        self.wpercent = (1/self.scalefactor)
 
-        hsize = int((float(self.height)/self.reducefactor))
+        hsize = int((float(self.height)/self.scalefactor))
 
         self.thumbnailcircuit= Image.new('RGB', (self.basewidth,hsize), self.BLACK)
         self.thumbnailcircuit_ceiling= Image.new('RGB', (self.basewidth,hsize), self.BLACK)
@@ -232,14 +247,14 @@ class circuit():
            for j in range(self.Matrix_Floor_height):
               ktexindex,ktex=self.Matrix_Floor[j][i]
               im2=self.txlist[ktexindex][ktex]
-              self.thumbnailcircuit.paste(im2, (int(i*500/self.reducefactor), int(j*500/self.reducefactor)))
+              self.thumbnailcircuit.paste(im2, (int(i*500/self.scalefactor), int(j*500/self.scalefactor)))
 
     def draw_thumbnail_ceiling(self):
         for i in range(self.Matrix_Ceiling_width) :
            for j in range(self.Matrix_Ceiling_height):
               ktexindex,ktex=self.Matrix_Ceiling[j][i]
               im2=self.txlist[ktexindex][ktex]
-              self.thumbnailcircuit_ceiling.paste(im2, (int(i*500/self.reducefactor), int(j*500/self.reducefactor)))
+              self.thumbnailcircuit_ceiling.paste(im2, (int(i*500/self.scalefactor), int(j*500/self.scalefactor)))
 
     def translate_circuit(self,X0,Y0):
         for i in range(0,len(self.defc)) :
@@ -284,7 +299,7 @@ class circuit():
 
     def load_textures(self) :
         self.tile_w, self.tile_h = self.Matrix_Floor_tile_width,self.Matrix_Floor_tile_height
-        size=(int(self.tile_w/self.reducefactor), int(self.tile_h/self.reducefactor))
+        size=(int(self.tile_w/self.scalefactor), int(self.tile_h/self.scalefactor))
         ktindex=0
         texture_file_exists = True
 
@@ -391,7 +406,7 @@ class circuit():
 
 
     def compile(self):
-        cwidth=50  # 5cm
+        cwidth=self.circuit_info["LINE_WIDTH"]  # 5cm
         p00 = self.defc[0]
 
         first=True
@@ -500,5 +515,5 @@ LOW_D=100
 LOW_D_pixel=70
 
 
-circuit=circuit(track_folder="Tracks/Epita")
+circuit=circuit(track_folder="Tracks/Epita",ClearFolder=True,scalefactor=4)
 
