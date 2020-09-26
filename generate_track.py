@@ -24,7 +24,7 @@ import random
 
 
 class circuit():
-    def __init__(self,circuit_data=None, Track_folder=None):
+    def __init__(self,circuit_data=None, track_folder=None):
 
         self.reducefactor=4 # to save memory we will work with images where one pixel is a cm instead of images where 1pixel=1mm.
                               # 1 pixel = 1 * reducefactor mm
@@ -46,7 +46,7 @@ class circuit():
         self.BLUE = (0, 0, 255)
         self.RED = (255, 0, 0)
 
-        if Track_folder is None : 
+        if track_folder is None : 
            self.track_folder="Tracks/Cristallin"
         else : 
            self.track_folder=track_folder
@@ -97,7 +97,7 @@ class circuit():
               [19500,1500,0,500,1500,0.5,0],
               [19500,1500,pi/2,500,1500,0,0]]
 
-        self.defc=self.defc1
+        self.defc=self.defc2
 
         self.circuit_info={}
         self.circuit_info["width"]=22000
@@ -110,12 +110,12 @@ class circuit():
         self.circuit_info["translate_y"]=1500
 
 
-        # code used to generate a json file :
-        #try:
-        #    with open(self.track_folder+"/def_track.json", 'w') as fp:
-        #        json.dump(self.circuit_info, fp)
-        #except:
-        #    print("Unexpected error:", sys.exc_info()[0])
+
+        try:
+            with open(self.track_folder+"/def_track.json", 'w') as fp:
+                json.dump(self.circuit_info, fp,indent=3)
+        except:
+            print("Unexpected error:", sys.exc_info()[0])
 
 
         # Load circuit info from file : 
@@ -125,6 +125,40 @@ class circuit():
         except FileNotFoundError:
                 print("Error loading track config")
         self.defc=self.circuit_info["defc"]
+
+        #sizes of circuit are in mm.
+        self.width,self.height = self.circuit_info["width"],self.circuit_info["height"]
+        self.ceiling_altitude = self.circuit_info["altitude"]
+
+        # size of tiles in real world : ( size are in mm)
+        self.Matrix_Ceiling_tile_width=self.circuit_info["tile_width"]
+        self.Matrix_Ceiling_tile_height=self.circuit_info["tile_height"]
+        # how many tiles will be needed to draw the ceiling ?  
+        self.tile_w, self.tile_h = 500,500
+        self.Matrix_Ceiling_width=int(self.width/self.Matrix_Ceiling_tile_width)+1
+        self.Matrix_Ceiling_height=int(self.height/self.Matrix_Ceiling_tile_height)+1
+        self.Matrix_Ceiling = [[0 for x in range(self.Matrix_Ceiling_width)] for y in range(self.Matrix_Ceiling_height)]
+
+        # the floor matrix with only texture numbers, not instance texture numbers : 
+        self.Simple_Matrix_Ceiling = [[0 for x in range(self.Matrix_Ceiling_width)] for y in range(self.Matrix_Ceiling_height)]
+
+        # size of tiles in real world : ( size are in mm)
+        self.Matrix_Floor_tile_width=self.circuit_info["tile_width"]
+        self.Matrix_Floor_tile_height=self.circuit_info["tile_height"]
+        # how many tiles will be needed to draw the ceiling ?  
+        self.Matrix_Floor_width=int(self.width/self.Matrix_Floor_tile_width)+1
+        self.Matrix_Floor_height=int(self.height/self.Matrix_Floor_tile_height)+1
+        self.Matrix_Floor = [[0 for x in range(self.Matrix_Floor_width)] for y in range(self.Matrix_Floor_height)]
+
+        # the floor matrix with only texture numbers, not instance texture numbers : 
+        self.Simple_Matrix_Floor = [[0 for x in range(self.Matrix_Floor_width)] for y in range(self.Matrix_Floor_height)]
+
+
+        #when building a new map : this will generate dummy map_texture files : 
+        self.init_empty_map() 
+
+
+
 
         self.translate_circuit(self.circuit_info["translate_x"],self.circuit_info["translate_y"])
 
@@ -219,74 +253,53 @@ class circuit():
         RGB_img = cv2.cvtColor(np.array(self.thumbnailcircuit_ceiling), cv2.COLOR_BGR2RGB)
         cv2_imshow(RGB_img)
 
-    def Add_texture(self,ktindex,filename):
-        size=(int(self.tile_w/self.reducefactor), int(self.tile_h/self.reducefactor))
+    def get_file_by_prefix(self,path,prefix):
+        result=""
+        for i in os.listdir(path):
+            if os.path.isfile(os.path.join(path,i)) and i.startswith(prefix) :
+                result=i
+        return result
 
-        img=Image.open(self.texture_folder+"/"+filename).convert("RGB")
-        img=img.resize(size,Image.ANTIALIAS)
+    def Add_texture(self,ktindex,size):
+        #size  : size of texture bitmap in our circuit image ( already converted with the reducefactor factor): 
+        n_instance=0
+        instance_exists = True
+        # Add the container for all the instances of the texture :
+        self.txlist.append([])
+        self.txnumbers.append([])
 
-        self.txlist[ktindex].append(img)
+        # now populate it with the images of each texture instance :
+        while instance_exists :
+            prefix=str(ktindex)+"_"+str(n_instance)+"_"
+            filename=self.get_file_by_prefix(self.texture_folder,prefix)
+            if filename !=  "" :
+                img=Image.open(self.texture_folder+"/"+filename).convert("RGB")
+                img=img.resize(size,Image.ANTIALIAS)
+                self.txlist[ktindex].append(img)
+                n_instance+=1
+                self.txnumbers[ktindex]=n_instance
+            else : 
+                instance_exists=False 
+        return n_instance
 
     def load_textures(self) :
-        self.tile_w, self.tile_h = 500,500
+        self.tile_w, self.tile_h = self.Matrix_Floor_tile_width,self.Matrix_Floor_tile_height
+        size=(int(self.tile_w/self.reducefactor), int(self.tile_h/self.reducefactor))
+        ktindex=0
+        texture_file_exists = True
 
-        # we can have multiple instances of a texture code; they will be chosen randomly for that code. 
-        self.txlist.append([])
-        self.Add_texture(0,"ground_white_0.png")
-        self.Add_texture(0,"ground_white_1.png")
-        self.Add_texture(0,"ground_white_2.png")
-        self.Add_texture(0,"ground_white_0h.png")
-        self.Add_texture(0,"ground_white_1h.png")
-        self.Add_texture(0,"ground_white_2h.png")
-        self.Add_texture(0,"ground_white_0hv.png")
-        self.Add_texture(0,"ground_white_1hv.png")
-        self.Add_texture(0,"ground_white_2hv.png")
-        self.Add_texture(0,"ground_white_0v.png")
-        self.Add_texture(0,"ground_white_1v.png")
-        self.Add_texture(0,"ground_white_2v.png")
-        # keep track of how many instances we have for that texture.
-        self.txnumbers.append(len(self.txlist[0]))
+        while texture_file_exists :
+            nb_instances=self.Add_texture(ktindex,size)
+            if nb_instances == 0 : 
+            	texture_file_exists=False
+            else : 
+                ktindex+=1
+        print ( "Nb of textures loaded : " + str(ktindex))
+        return ktindex
 
-        # Ground_black
-        self.txlist.append([])
-        self.Add_texture(1,"ground_black_0.png")
-        self.Add_texture(1,"ground_black_1.png")
-        self.Add_texture(1,"ground_black_2.png")
-        self.Add_texture(1,"ground_black_0h.png")
-        self.Add_texture(1,"ground_black_1h.png")
-        self.Add_texture(1,"ground_black_2h.png")
-        self.Add_texture(1,"ground_black_0hv.png")
-        self.Add_texture(1,"ground_black_1hv.png")
-        self.Add_texture(1,"ground_black_2hv.png")
-        self.Add_texture(1,"ground_black_0v.png")
-        self.Add_texture(1,"ground_black_1v.png")
-        self.Add_texture(1,"ground_black_2v.png")
 
-        self.txnumbers.append(len(self.txlist[1]))
 
-        # ceiling tiles
-        self.txlist.append([])
-        self.Add_texture(2,"ceiling0.png")
-        self.txnumbers.append(len(self.txlist[len(self.txlist)-1]))
 
-        self.txlist.append([])
-        self.Add_texture(3,"ceiling1.png")
-        self.txnumbers.append(len(self.txlist[len(self.txlist)-1]))
-
-        self.txlist.append([])
-        self.Add_texture(4,"ceiling2.png")
-        self.txnumbers.append(len(self.txlist[len(self.txlist)-1]))
-
-        self.txlist.append([])
-        self.Add_texture(5,"ceiling3.png")
-        self.txnumbers.append(len(self.txlist[len(self.txlist)-1]))
-
-        self.txlist.append([])
-        self.Add_texture(6,"ceiling4.png")
-        self.txnumbers.append(len(self.txlist[len(self.txlist)-1]))
-
-        #ground tile size
-        bg_w, bg_h = 500,500
 
         # Sides
 
@@ -300,53 +313,23 @@ class circuit():
         #self.side4=np.array(Image.open(self.texture_folder+"/side4.png").convert("RGB"))
         #self.side4_w, self.side4_h =self.side4.shape[1],self.side4.shape[0]
 
+    def init_empty_map(self) :
 
-    def load_map(self):
+        # initiate a default map matrix  in case none is given in the folder : 
+        # default texture wil be 0
 
-        #sizes of circuit are in mm.
-        self.width,self.height = 22000,8000
-        self.ceiling_altitude = 2200
-
-        # size of tiles in real world : ( size are in mm)
-        self.Matrix_Ceiling_tile_width=500
-        self.Matrix_Ceiling_tile_height=500
-
-
-        # how many tiles will be needed to draw the ceiling ?  
-        self.tile_w, self.tile_h = 500,500
-        self.Matrix_Ceiling_width=int(self.width/self.Matrix_Ceiling_tile_width)+1
-        self.Matrix_Ceiling_height=int(self.height/self.Matrix_Ceiling_tile_height)+1
-        self.Matrix_Ceiling = [[0 for x in range(self.Matrix_Ceiling_width)] for y in range(self.Matrix_Ceiling_height)]
-
-
-        # size of tiles in real world : ( size are in mm)
-        self.Matrix_Floor_tile_width=500
-        self.Matrix_Floor_tile_height=500
-        # how many tiles will be needed to draw the ceiling ?  
-        self.Matrix_Floor_width=int(self.width/self.tile_w)+1
-        self.Matrix_Floor_height=int(self.height/self.tile_h)+1
-        self.Matrix_Floor = [[0 for x in range(self.Matrix_Ceiling_width)] for y in range(self.Matrix_Ceiling_height)]
-
-
-        # bg1 = Image.eval(self.txlist[ktex_index][ktex], lambda x: x+(i+j)/1000)
-        # self.circuit_image.paste(bg1, (i, j))                       
-        # dispatch the textures for cristallin ;
+        # to be addeed : check if there is no matrix floor, then if not : generate it :
         for i in range(0, self.Matrix_Floor_width, 1):
             for j in range(0, self.Matrix_Floor_height, 1):
                 if j>=self.Matrix_Floor_height-4 : 
-                   ktex= random.randint(0,11)
                    ktex_index=1
                 else : 
-                   ktex= random.randint(0,11)
-                   ktex_index=0
-                   # Modified for Epita : 
-                   # ktex_index=1
-                   # fin epita
+                   ktex_index=0  # first texture
+
                    if i %3 == 0 and j %3 == 1 : 
                       ktex_index=1
 
-                self.Matrix_Floor[int(j)][int(i)]=[ktex_index,ktex]
-
+                self.Simple_Matrix_Floor[int(j)][int(i)]=ktex_index
                 ktex_index=2
                 if i %3 == 0 and j %3 == 1 : 
                    ktex_index=4
@@ -355,10 +338,57 @@ class circuit():
                    if rnd %10 == 0 : ktex_index =5
                    if rnd == 5 : ktex_index =6
 
+                self.Simple_Matrix_Ceiling[int(j)][int(i)]=ktex_index
 
-                self.Matrix_Ceiling[int(j)][int(i)]=[ktex_index,0]
 
-          # le ground est défini dnas le get color from matrix
+
+        # generate a texture_map json file if it does not exists:
+        #try:
+
+        test=json.dumps(self.Simple_Matrix_Floor)
+        test = test.replace("],", "],\n")
+        with open(self.track_folder+"/floor_texture_map.json", 'w') as fp:
+                fp.write(test)
+               # json.dump(self.Simple_Matrix_Floor,fp)
+
+        test=json.dumps(self.Simple_Matrix_Ceiling)
+        test = test.replace("],", "],\n")
+        with open(self.track_folder+"/ceiling_texture_map.json", 'w') as fp:
+                fp.write(test)
+              #  json.dump(self.Simple_Matrix_Ceiling,fp)
+
+    def load_map(self):
+
+        # Load simple matrix from file
+        try:
+            with open(self.track_folder+"/floor_texture_map.json", 'r') as f:
+                self.Simple_Matrix_Floor = json.load(f)
+        except FileNotFoundError:
+                print("Error loading floor_texture_map.json")
+
+        try:
+            with open(self.track_folder+"/ceiling_texture_map.json", 'r') as f:
+                self.Simple_Matrix_Ceiling = json.load(f)
+        except FileNotFoundError:
+                print("Error loading ceiling_texture_map.json")
+
+
+        #randomize instances of textures : 
+        for i in range(0, self.Matrix_Floor_width, 1):
+            for j in range(0, self.Matrix_Floor_height, 1):
+                   ktex_index=self.Simple_Matrix_Floor[j][i]
+                   nb_texture_instance=self.txnumbers[ktex_index]
+                   ktex= random.randint(0,nb_texture_instance-1)
+                   self.Matrix_Floor[int(j)][int(i)]=[ktex_index,ktex]
+
+        for i in range(0, self.Matrix_Ceiling_width, 1):
+            for j in range(0, self.Matrix_Ceiling_height, 1):
+                   ktex_index=self.Simple_Matrix_Ceiling[j][i]
+                   nb_texture_instance=self.txnumbers[ktex_index]
+                   ktex= random.randint(0,nb_texture_instance-1)
+                   self.Matrix_Ceiling[int(j)][int(i)]=[ktex_index,ktex]
+
+
 
     def compile(self):
         cwidth=50  # 5cm
@@ -470,5 +500,5 @@ LOW_D=100
 LOW_D_pixel=70
 
 
-circuit=circuit()
+circuit=circuit(track_folder="Tracks/Epita")
 
